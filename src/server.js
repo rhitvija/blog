@@ -233,7 +233,7 @@ app.use(cors({
 
 // FIX: Pass the schema configuration into the drizzle initialization block
 const relations = defineRelations (schema);
-const db = drizzle(process.env.DATABASE_URL, { relations });
+const db = drizzle({ connection: process.env.DATABASE_URL, relations });
 
 app.get('/', (req, res) => {
   res.json({ msg: 'Hello!' });
@@ -265,12 +265,17 @@ app.post('/users', async (req, res) => {
     const [newUser] = await db
       .insert(usersTable)
       .values({
-        firstName,
-        lastName,
+        // The "age" column holds last names in the existing data.
+        name: firstName,
+        age: lastName,
         email,
         password: hashedPassword
       })
-      .returning();
+      .returning({
+        id: usersTable.id,
+        name: usersTable.name,
+        email: usersTable.email
+      });
 
     return res.status(201).json({
       msg: 'User created successfully!',
@@ -298,7 +303,7 @@ app.post('/user', (req, res) => {
 app.get('/posts', async function (req, res) {
   try {
     // This will now work perfectly because schema is provided to Drizzle
-    const posts = await db.query.users.findFirst();
+    const posts = await db.query.posts.findMany();
 
     return res.json({
       msg: "posts retrieved success!",
@@ -315,7 +320,9 @@ app.get('/posts', async function (req, res) {
 
 app.get ('/users', async function (req, res){
   try{
-    const users = db.query.usersTable.findMany();
+    const users = await db.query.usersTable.findMany({
+      columns: { password: false }
+    });
 
     return res.json({
       msg: "data fetched succsessful!",
@@ -323,7 +330,7 @@ app.get ('/users', async function (req, res){
     });
   } catch (err) {
     console.error (err);
-    return res.json({
+    return res.status(500).json({
       msg: 'something went wrong',
       error: err.message
     });
